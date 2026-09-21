@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Hagorty ❤️</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #050005;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+canvas {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+}
+
+#start {
+    position: fixed;
+    inset: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: rgba(5, 0, 5, 0.82);
+
+    color: #ff78b7;
+
+    font-family: Arial, sans-serif;
+    font-size: 22px;
+    letter-spacing: 2px;
+
+    text-shadow:
+        0 0 12px #e91e63;
+
+    cursor: pointer;
+
+    z-index: 10;
+
+    transition: opacity .8s ease;
+}
+
+#start.hide {
+    opacity: 0;
+    pointer-events: none;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="start">
+    ♥ Tap to start ♥
+</div>
+
+<audio
+    id="music"
+    src="https://files.catbox.moe/1jvjgv.mp3"
+    preload="auto">
+</audio>
+
+<script>
+
+const canvas =
+    document.getElementById("canvas");
+
+const ctx =
+    canvas.getContext("2d");
+
+const start =
+    document.getElementById("start");
+
+const music =
+    document.getElementById("music");
+
+let W, H;
+
+let backgroundParticles = [];
+let heartParticles = [];
+
+let musicDuration = 0;
+let startTime = null;
+let doneTime = null;
+
+
+/* =================================
+   TEXT INSIDE THE HEART
+================================= */
+
+const LINE_1 = "𝐈 𝐋𝐨𝐯𝐞 𝐲𝐨𝐮";
+const LINE_2 = "𝐇𝐚𝐠𝐨𝐫𝐭𝐲";
+
+let textSize = 20;
+
+
+/* =================================
+   GLOW SPRITES
+   (بدل shadowBlur اللي كان بيعلّق)
+================================= */
+
+function makeGlow(r, g, b) {
+
+    const s =
+        document.createElement("canvas");
+
+    s.width = 64;
+    s.height = 64;
+
+    const c =
+        s.getContext("2d");
+
+    const grad =
+        c.createRadialGradient(
+            32, 32, 0,
+            32, 32, 32
+        );
+
+    grad.addColorStop(0,   `rgba(${r},${g},${b},1)`);
+    grad.addColorStop(0.3, `rgba(${r},${g},${b},0.85)`);
+    grad.addColorStop(0.6, `rgba(${r},${g},${b},0.25)`);
+    grad.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+
+    c.fillStyle = grad;
+    c.fillRect(0, 0, 64, 64);
+
+    return s;
+}
+
+const glowSprites = [
+
+    makeGlow(255, 105, 185),
+    makeGlow(255, 63, 152),
+    makeGlow(255, 170, 215),
+    makeGlow(233, 30, 99)
+];
+
+
+/* =================================
+   RESIZE
+================================= */
+
+function resize() {
+
+    const dpr =
+        window.devicePixelRatio || 1;
+
+    canvas.width =
+        window.innerWidth * dpr;
+
+    canvas.height =
+        window.innerHeight * dpr;
+
+    canvas.style.width =
+        window.innerWidth + "px";
+
+    canvas.style.height =
+        window.innerHeight + "px";
+
+    ctx.setTransform(
+        dpr,
+        0,
+        0,
+        dpr,
+        0,
+        0
+    );
+
+    W = window.innerWidth;
+    H = window.innerHeight;
+
+    createHeart();
+    createBackground();
+    layoutText();
+}
+
+window.addEventListener(
+    "resize",
+    resize
+);
+
+
+/* =================================
+   TEXT SIZE (يتظبط على حجم القلب)
+================================= */
+
+function layoutText() {
+
+    const scale =
+        Math.min(W, H) / 29;
+
+    const maxW =
+        32 * scale * 0.6;
+
+    ctx.save();
+
+    ctx.font =
+        "bold 100px Arial, sans-serif";
+
+    const w =
+        Math.max(
+            ctx.measureText(LINE_1).width,
+            ctx.measureText(LINE_2).width
+        );
+
+    ctx.restore();
+
+    textSize =
+        Math.min(
+            100 * maxW / w,
+            scale * 3
+        );
+}
+
+
+/* =================================
+   BACKGROUND STARS
+================================= */
+
+const BACKGROUND_COUNT = 260;
+
+function createBackground() {
+
+    backgroundParticles = [];
+
+    for (
+        let i = 0;
+        i < BACKGROUND_COUNT;
+        i++
+    ) {
+
+        backgroundParticles.push({
+
+            x:
+                Math.random() * W,
+
+            y:
+                Math.random() * H,
+
+            size:
+                Math.random() * 2.2 + .35,
+
+            speed:
+                Math.random() * .45 + .08,
+
+            alpha:
+                Math.random() * .55 + .15
+        });
+    }
+}
+
+
+/* =================================
+   HAGORTY
+================================= */
+
+let names = [];
+
+function createNames() {
+
+    names = [];
+
+    for (
+        let i = 0;
+        i < 16;
+        i++
+    ) {
+
+        names.push({
+
+            x:
+                Math.random() * W,
+
+            y:
+                Math.random() * H,
+
+            size:
+                Math.random() * 11 + 17,
+
+            alpha:
+                Math.random() * .16 + .07,
+
+            speed:
+                Math.random() * .12 + .03,
+
+            phase:
+                Math.random() * Math.PI * 2
+        });
+    }
+}
+
+
+/* =================================
+   HEART SHAPE
+================================= */
+
+function heartPoint(t, scale) {
+
+    const x =
+        16 *
+        Math.pow(
+            Math.sin(t),
+            3
+        );
+
+    const y =
+        13 * Math.cos(t)
+        - 5 * Math.cos(2 * t)
+        - 2 * Math.cos(3 * t)
+        - Math.cos(4 * t);
+
+    return {
+
+        x:
+            W / 2 + x * scale,
+
+        y:
+            H / 2 - y * scale
+    };
+}
+
+
+/* =================================
+   CREATE GLOWING OUTLINE HEART
+================================= */
+
+function createHeart() {
+
+    heartParticles = [];
+
+    const scale =
+        Math.min(W, H) / 29;
+
+    /*
+       عدد النقط (لو لسه بيهنّج قلّليه،
+       ولو عايزاه أكتر زوّديه)
+    */
+
+    const COUNT = 1000;
+
+    const jitterMax =
+        scale * 0.75;
+
+    for (
+        let i = 0;
+        i < COUNT;
+        i++
+    ) {
+
+        const t =
+            Math.random() *
+            Math.PI * 2;
+
+        const edge =
+            heartPoint(
+                t,
+                scale
+            );
+
+
+        /*
+           النقط بتتوزع على خط القلب
+           مع انتشار بسيط حواليه
+        */
+
+        const a =
+            Math.random() *
+            Math.PI * 2;
+
+        const r =
+            (
+                Math.random() +
+                Math.random() - 1
+            ) * jitterMax;
+
+        const targetX =
+            edge.x +
+            Math.cos(a) * r;
+
+        const targetY =
+            edge.y +
+            Math.sin(a) * r;
+
+
+        /*
+           النقط تبدأ منتشرة
+           في شكل مجرة حول القلب
+        */
+
+        const angle =
+            Math.random() *
+            Math.PI * 2;
+
+        const distance =
+            Math.max(W, H) *
+            (
+                .35 +
+                Math.random() * 1.35
+            );
+
+        const startX =
+            W / 2 +
+            Math.cos(angle) *
+            distance;
+
+        const startY =
+            H / 2 +
+            Math.sin(angle) *
+            distance;
+
+
+        /*
+           نقط صغيرة + شوية نقط كبيرة لامعة
+        */
+
+        const big =
+            Math.random() < .18;
+
+        heartParticles.push({
+
+            x: startX,
+            y: startY,
+
+            startX,
+            startY,
+
+            targetX,
+            targetY,
+
+            size:
+                big
+                ? Math.random() * 1.8 + 1.8
+                : Math.random() * 1 + .5,
+
+            sprite:
+                Math.floor(
+                    Math.random() *
+                    glowSprites.length
+                ),
+
+            alpha:
+                Math.random() * .45 + .55,
+
+            delay:
+                Math.random() * .25,
+
+            twinkle:
+                Math.random() *
+                Math.PI * 2,
+
+            sparkle:
+                Math.random() < .07
+        });
+    }
+}
+
+
+/* =================================
+   EASING
+================================= */
+
+function ease(t) {
+
+    return 1 -
+        Math.pow(
+            1 - t,
+            3
+        );
+}
+
+
+/* =================================
+   DRAW
+================================= */
+
+function draw() {
+
+    ctx.clearRect(
+        0,
+        0,
+        W,
+        H
+    );
+
+    const now =
+        performance.now();
+
+    const scale =
+        Math.min(W, H) / 29;
+
+    let elapsed = 0;
+
+    if (startTime) {
+
+        elapsed =
+            (
+                now -
+                startTime
+            ) / 1000;
+    }
+
+
+    /*
+       القلب يكتمل قبل نهاية الأغنية
+       بثانية واحدة
+    */
+
+    let progress = 0;
+
+    if (musicDuration > 0) {
+
+        const formationTime =
+            Math.max(
+                .5,
+                musicDuration - 1
+            );
+
+        progress =
+            Math.min(
+                elapsed /
+                formationTime,
+                1
+            );
+    }
+
+
+    /* =================================
+       BACKGROUND
+    ================================= */
+
+    ctx.save();
+
+    for (
+        const p of backgroundParticles
+    ) {
+
+        p.y -= p.speed;
+
+        if (p.y < -10) {
+
+            p.y =
+                H + 10;
+
+            p.x =
+                Math.random() * W;
+        }
+
+        const s =
+            p.size * 2.5;
+
+        ctx.globalAlpha =
+            p.alpha;
+
+        ctx.drawImage(
+            glowSprites[0],
+            p.x - s,
+            p.y - s,
+            s * 2,
+            s * 2
+        );
+    }
+
+    ctx.restore();
+
+
+    /* =================================
+       HAGORTY
+    ================================= */
+
+    for (
+        const n of names
+    ) {
+
+        n.y -= n.speed;
+
+        n.phase += .008;
+
+        if (n.y < -40) {
+
+            n.y =
+                H + 40;
+
+            n.x =
+                Math.random() * W;
+        }
+
+        ctx.save();
+
+        ctx.globalAlpha =
+            n.alpha;
+
+        ctx.font =
+            `${n.size}px "Brush Script MT", "Segoe Script", cursive`;
+
+        ctx.fillStyle =
+            "#ff78b7";
+
+        ctx.shadowBlur = 10;
+
+        ctx.shadowColor =
+            "#9b174f";
+
+        ctx.textAlign =
+            "center";
+
+        ctx.fillText(
+            "Hagorty",
+            n.x +
+            Math.sin(n.phase) * 7,
+            n.y
+        );
+
+        ctx.restore();
+    }
+
+
+    /* =================================
+       HEART FORMATION
+    ================================= */
+
+    ctx.save();
+
+    for (
+        const p of heartParticles
+    ) {
+
+        let localProgress =
+            (
+                progress -
+                p.delay
+            ) /
+            (
+                1 -
+                p.delay
+            );
+
+        localProgress =
+            Math.max(
+                0,
+                Math.min(
+                    localProgress,
+                    1
+                )
+            );
+
+        const e =
+            ease(localProgress);
+
+
+        /*
+           حركة النقط ناحية القلب
+        */
+
+        const x =
+            p.startX +
+            (
+                p.targetX -
+                p.startX
+            ) * e;
+
+        const y =
+            p.startY +
+            (
+                p.targetY -
+                p.startY
+            ) * e;
+
+
+        /*
+           حركة بسيطة تخلي التجمع حي
+        */
+
+        const finalX =
+            x +
+            Math.sin(
+                now * .0015 +
+                p.twinkle
+            ) *
+            (1 - e) *
+            4;
+
+        const finalY =
+            y +
+            Math.cos(
+                now * .0012 +
+                p.twinkle
+            ) *
+            (1 - e) *
+            3;
+
+
+        /*
+           وميض النقط
+        */
+
+        const twinkle =
+            .7 +
+            Math.sin(
+                now * .004 +
+                p.twinkle
+            ) * .3;
+
+        const alpha =
+            p.alpha *
+            twinkle;
+
+
+        /*
+           النقطة اللامعة
+        */
+
+        const s =
+            p.size * 2.4;
+
+        ctx.globalAlpha =
+            alpha;
+
+        ctx.drawImage(
+            glowSprites[p.sprite],
+            finalX - s,
+            finalY - s,
+            s * 2,
+            s * 2
+        );
+
+
+        /*
+           لمعة صغيرة على شوية نقط
+        */
+
+        if (p.sparkle) {
+
+            ctx.globalAlpha =
+                alpha * .75;
+
+            ctx.strokeStyle =
+                "rgb(255,190,225)";
+
+            ctx.lineWidth = .55;
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                finalX - p.size * 2.7,
+                finalY
+            );
+
+            ctx.lineTo(
+                finalX + p.size * 2.7,
+                finalY
+            );
+
+            ctx.moveTo(
+                finalX,
+                finalY - p.size * 2.7
+            );
+
+            ctx.lineTo(
+                finalX,
+                finalY + p.size * 2.7
+            );
+
+            ctx.stroke();
+        }
+    }
+
+    ctx.restore();
+
+
+    /* =================================
+       HEART GLOW + TEXT
+    ================================= */
+
+    if (progress >= 1) {
+
+        if (!doneTime) {
+
+            doneTime = now;
+        }
+
+        /* glow */
+
+        ctx.save();
+
+        ctx.globalAlpha = .18;
+
+        ctx.beginPath();
+
+        for (
+            let t = 0;
+            t <= Math.PI * 2;
+            t += .02
+        ) {
+
+            const p =
+                heartPoint(
+                    t,
+                    scale
+                );
+
+            if (t === 0) {
+
+                ctx.moveTo(
+                    p.x,
+                    p.y
+                );
+
+            } else {
+
+                ctx.lineTo(
+                    p.x,
+                    p.y
+                );
+            }
+        }
+
+        ctx.closePath();
+
+        ctx.strokeStyle =
+            "#ff3f98";
+
+        ctx.lineWidth = 2;
+
+        ctx.shadowBlur = 25;
+
+        ctx.shadowColor =
+            "#ff147d";
+
+        ctx.stroke();
+
+        ctx.restore();
+
+
+        /* text */
+
+        const fade =
+            Math.min(
+                (now - doneTime) / 1800,
+                1
+            );
+
+        const pulse =
+            .9 +
+            Math.sin(now * .003) * .1;
+
+        ctx.save();
+
+        ctx.globalAlpha =
+            fade * pulse;
+
+        ctx.textAlign =
+            "center";
+
+        ctx.textBaseline =
+            "middle";
+
+        ctx.font =
+            `bold ${textSize}px Arial, sans-serif`;
+
+        ctx.fillStyle =
+            "#ffd6ea";
+
+        ctx.shadowBlur = 14;
+
+        ctx.shadowColor =
+            "#ff2d8a";
+
+        const cy =
+            H / 2 - scale * 0.5;
+
+        const ls =
+            textSize * 1.4;
+
+        ctx.fillText(
+            LINE_1,
+            W / 2,
+            cy - ls / 2
+        );
+
+        ctx.fillText(
+            LINE_2,
+            W / 2,
+            cy + ls / 2
+        );
+
+        ctx.restore();
+    }
+
+
+    requestAnimationFrame(draw);
+}
+
+
+/* =================================
+   START
+================================= */
+
+start.addEventListener(
+    "click",
+    async () => {
+
+        start.classList.add(
+            "hide"
+        );
+
+        try {
+
+            await music.play();
+
+            if (
+                music.duration &&
+                isFinite(
+                    music.duration
+                )
+            ) {
+
+                musicDuration =
+                    music.duration;
+            }
+
+            startTime =
+                performance.now();
+
+        } catch (error) {
+
+            console.log(
+                "Audio error:",
+                error
+            );
+        }
+    }
+);
+
+
+/* =================================
+   AUDIO METADATA
+================================= */
+
+music.addEventListener(
+    "loadedmetadata",
+    () => {
+
+        if (
+            music.duration &&
+            isFinite(
+                music.duration
+            )
+        ) {
+
+            musicDuration =
+                music.duration;
+        }
+    }
+);
+
+
+/* =================================
+   INIT
+================================= */
+
+resize();
+
+createNames();
+
+requestAnimationFrame(draw);
+
+</script>
+
+</body>
+</html>
